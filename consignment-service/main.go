@@ -1,12 +1,10 @@
 package main
 
 import (
-	pb "github.com/rscarvalho/shipgo/consignment-service/proto/consignment"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
-	"log"
-	"net"
+  "github.com/micro/go-micro"
+  pb "github.com/rscarvalho/shipgo/consignment-service/proto/consignment"
+  "golang.org/x/net/context"
+  "log"
 )
 
 const (
@@ -36,33 +34,34 @@ type service struct {
 	repo IRepository
 }
 
-func (s *service) GetConsignments(ctx context.Context, req *pb.GetRequest) (*pb.Response, error) {
-	return &pb.Response{Consignments: s.repo.GetAll()}, nil
+func (s *service) GetConsignments(ctx context.Context, req *pb.GetRequest, out *pb.Response) error {
+  out.Consignments = s.repo.GetAll()
+	return nil
 }
 
-func (s *service) CreateConsignment(ctx context.Context, req *pb.Consignment) (*pb.Response, error) {
+func (s *service) CreateConsignment(ctx context.Context, req *pb.Consignment, out *pb.Response) error {
 	consignment, err := s.repo.Create(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return &pb.Response{Created: true, Consignment: consignment}, nil
+	out.Created = true
+  out.Consignment = consignment
+	return nil
 }
 
 func main() {
-	repo := &Repository{}
+  repo := &Repository{}
 
-	lis, err := net.Listen("tcp", port)
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-	s := grpc.NewServer()
+	srv := micro.NewService(
+	  micro.Name("go.micro.srv.consignment"),
+	  micro.Version("latest"))
 
-	pb.RegisterShippingServiceServer(s, &service{repo})
+	srv.Init()
 
-	reflection.Register(s)
+	pb.RegisterShippingServiceHandler(srv.Server(), &service{repo})
 
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
-	}
+	if err := srv.Run(); err != nil {
+	  log.Fatal(err)
+  }
 }
